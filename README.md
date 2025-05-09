@@ -61,3 +61,32 @@ Ambientes de simulação:
 	•	Scripts de ataque com Metasploit/Nmap
 	•	Resposta defensiva documentada (logs, alertas)
 	•	Lições aprendidas e estratégias de contenção
+
+
+	•	Requisitos por pasta estão em cada README.md interno.
+	•	Scripts podem ser testados em laboratórios locais ou ambientes virtualizados (VirtualBox, Proxmox, AWS Free Tier).
+
+COMO USAR
+```bash
+git clone https://github.com/seuusuario/cybersec-blueprints.git
+cd cybersec-blueprints
+
+⸻
+
+Contribuição
+
+Este repositório é vivo! Contribuições são bem-vindas via pull requests, issues ou sugestões no GitHub Discussions.
+
+⸻
+
+Licença
+
+MIT License — fique à vontade para usar, adaptar e contribuir, com atribuição.
+
+⸻
+
+Contato
+
+Criado por: [Felipe Miranda]
+LinkedIn: [felipe-miranda-399462353]
+GitHub: [photografereth]
