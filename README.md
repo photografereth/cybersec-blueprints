@@ -24,3 +24,40 @@ cybersec-blueprints/
 ├── threat-hunting/          # Queries, playbooks e táticas de hunting com base no MITRE ATT&CK
 ├── red-vs-blue-labs/        # Ambientes simulados com visão ofensiva e defensiva
 └── docs/                    # Documentação, tutoriais e referências
+
+Conteúdo por Módulo
+
+nmap-automation/
+
+Scripts Shell e Python para:
+	•	Scans agendados com output estruturado
+	•	Parsing e exportação para CSV/JSON
+	•	Classificação de vulnerabilidades por severidade
+
+ansible-hardening/
+
+Playbooks baseados em benchmarks CIS e práticas de hardening como:
+	•	Desativação de serviços desnecessários
+	•	Políticas de senha e auditoria
+	•	Configurações de firewall e SSH
+
+splunk-dashboards/
+
+Dashboards e alertas para:
+	•	Detecção de movimentos laterais
+	•	Análise de tráfego suspeito e brute force
+	•	Tentativas de persistência em endpoints
+
+threat-hunting/
+
+Táticas baseadas no MITRE ATT&CK:
+	•	Queries para Windows/Linux/M365
+	•	Checklists de análise e indicadores
+	•	Playbooks de hunting manual e automatizado
+
+red-vs-blue-labs/
+
+Ambientes de simulação:
+	•	Scripts de ataque com Metasploit/Nmap
+	•	Resposta defensiva documentada (logs, alertas)
+	•	Lições aprendidas e estratégias de contenção
