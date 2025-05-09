@@ -75,7 +75,7 @@ cd cybersec-blueprints
 
 Contribuição
 
-Este repositório é vivo! Contribuições são bem-vindas via pull requests, issues ou sugestões no GitHub Discussions.
+Este repositório é vivo. Contribuições são bem-vindas via pull requests, issues ou sugestões no GitHub Discussions.
 
 ⸻
 
