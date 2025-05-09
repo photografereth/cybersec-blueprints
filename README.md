@@ -50,7 +50,7 @@ Dashboards e alertas para:
 
 threat-hunting/
 
-Táticas baseadas no MITRE ATT&CK:
+Táticas baseadas no MITRE ATTACK:
 	•	Queries para Windows/Linux/M365
 	•	Checklists de análise e indicadores
 	•	Playbooks de hunting manual e automatizado
