@@ -1,0 +1,160 @@
+# Configurações nmap-automation
+
+# Configurações para nmap-auto-scan.sh
+nmap:
+  # Argumentos padrão do Nmap
+  default_args: "-sS -sV -O --script=default,vuln"
+  # Portas padrão a verificar (altere conforme as necessidades do seu ambiente)
+  default_ports: "21,22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080"
+  # Tempo máximo de execução (em segundos)
+  timeout: 3600
+  # Registro detalhado
+  verbose: true
+  # Tentar determinar versões de SO
+  detect_os: true
+  # Banner para varreduras
+  scan_banner: "CyberSec Blueprints Security Scan"
+  # Limite de velocidade para ser mais discreto
+  max_rate: 1000
+  # Tamanho do lote de hosts para grandes varreduras
+  batch_size: 256
+
+# Configurações para nmap-report-parser.py
+parser:
+  # Portas consideradas críticas (geram alertas)
+  critical_ports:
+    - { port: 21, service: "ftp", reason: "FTP não criptografado" }
+    - { port: 23, service: "telnet", reason: "Telnet não criptografado" }
+    - { port: 25, service: "smtp", reason: "SMTP potencialmente aberto" }
+    - { port: 53, service: "domain", reason: "DNS potencialmente exposto" }
+    - { port: 111, service: "rpcbind", reason: "RPC Bind exposto" }
+    - { port: 135, service: "msrpc", reason: "MS RPC exposto" }
+    - { port: 139, service: "netbios-ssn", reason: "NetBIOS exposto" }
+    - { port: 445, service: "microsoft-ds", reason: "SMB exposto" }
+    - { port: 1433, service: "ms-sql-s", reason: "SQL Server exposto" }
+    - { port: 3306, service: "mysql", reason: "MySQL exposto" }
+    - { port: 3389, service: "ms-wbt-server", reason: "RDP exposto" }
+    - { port: 5432, service: "postgresql", reason: "PostgreSQL exposto" }
+    - { port: 5900, service: "vnc", reason: "VNC exposto" }
+    - { port: 8080, service: "http-proxy", reason: "Proxy HTTP exposto" }
+  
+  # Critérios para gerar alertas
+  alert_criteria:
+    # Sistemas operacionais obsoletos
+    - os_match: "Windows.*2003|Windows.*XP|Windows.*2000"
+    - os_match: "CentOS [4-5]|Red Hat Enterprise Linux [4-5]"
+    - os_match: "Debian [4-6]|Ubuntu (9|10)\\."
+    
+    # Serviços vulneráveis conhecidos
+    - service_match: "apache.*2\\.[0-2]"
+    - service_match: "OpenSSH.*(5|6)\\."
+    - service_match: "Microsoft IIS [1-6]\\."
+    - service_match: "ProFTPD 1\\.[2-3]\\."
+    - service_match: "vsftpd 2\\.[0-2]\\."
+    
+    # Scripts específicos do Nmap que indicam vulnerabilidades
+    - script_match: "vulners.*score=[789]\\.|score=10\\."
+    - script_match: "ssl-poodle|ssl-heartbleed|ms17-010"
+
+# Configurações de saída
+output:
+  # Formato padrão de saída
+  default_format: "json"
+  # Formatos suportados
+  formats:
+    - "json"
+    - "csv"
+    - "html"
+    - "splunk"
+  # Opções de relatório
+  report:
+    include_closed_ports: false
+    include_filtered_ports: false
+    group_by_subnet: true
+    highlight_critical: true
+  # Comparação com varreduras anteriores
+  diff:
+    enabled: true
+    highlight_changes: true
+    track_history: true
+    history_dir: "./history"
+
+# Configurações de alerta
+alerts:
+  # Nível de alerta padrão
+  default_level: "medium"
+  # Limites para considerar um host como crítico
+  host_criticality:
+    high: 3    # 3+ problemas críticos 
+    medium: 1  # 1-2 problemas críticos
+    low: 0     # Nenhum problema crítico
+  
+  # Alertas por email
+  email:
+    enabled: true
+    smtp_server: "smtp.example.com"
+    smtp_port: 587
+    use_tls: true
+    sender: "security-scans@example.com"
+    recipients: 
+      - "security-team@example.com"
+      - "network-admin@example.com"
+    subject_prefix: "[SECURITY] Nmap Scan Alert - "
+    include_summary: true
+    include_details: true
+    include_remediation: true
+  
+  # Alertas Discord
+  discord:
+    enabled: false
+    webhook_url: "https://discord.com/api/webhooks/your-webhook-id/your-token"
+    username: "Security Scanner"
+    avatar_url: "https://example.com/security-icon.png"
+    include_summary: true
+    severity_colors:
+      high: 16711680    # Vermelho
+      medium: 16737095  # Laranja
+      low: 65280        # Verde
+  
+  # Alertas Slack
+  slack:
+    enabled: false
+    webhook_url: "https://hooks.slack.com/services/your/slack/webhook"
+    channel: "#security-alerts"
+    username: "Security Scanner"
+    icon_emoji: ":warning:"
+    include_summary: true
+  
+  # Integração com sistema de tickets
+  ticketing:
+    enabled: false
+    system: "jira"  # Opções: jira, servicenow, github
+    api_url: "https://jira.example.com/rest/api/2/issue"
+    api_token: "your-api-token"
+    project_key: "SEC"
+    issue_type: "Security Issue"
+    priority_field: "priority"
+    priority_mapping:
+      high: "High"
+      medium: "Medium"
+      low: "Low"
+
+# Configurações para remediação
+remediation:
+  # Sugestões de remediação para problemas comuns
+  suggestions:
+    ftp: "Desative o FTP e use SFTP ou outros protocolos seguros para transferência de arquivos."
+    telnet: "Desative o Telnet e use SSH para acesso remoto."
+    smb: "Limite o acesso SMB apenas a redes internas confiáveis e implemente filtragem de IP."
+    rdp: "Use RDP apenas através de VPN e implemente autenticação de dois fatores."
+    old_os: "Atualize para um sistema operacional com suporte e atualizações de segurança."
+    old_software: "Atualize serviços para versões com suporte e atualizações de segurança."
+  
+  # Templates para playbooks de remediação
+  playbooks:
+    enabled: false
+    output_dir: "./remediation"
+    formats:
+      - "markdown"
+      - "ansible"
+EOF < /dev/null

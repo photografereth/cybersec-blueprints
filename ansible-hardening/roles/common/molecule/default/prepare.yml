@@ -1,0 +1,11 @@
+---
+# Arquivo opcional para preparar a máquina antes do teste
+# Aqui podemos instalar pacotes adicionais, se necessário
+
+- name: Instala atualizações antes do hardening
+  hosts: all
+  become: true
+  tasks:
+    - name: Atualiza cache apt
+      apt:
+        update_cache: yes

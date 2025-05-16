@@ -1,0 +1,368 @@
+<dashboard theme="dark">
+  <label>Central de Comando de Segurança</label>
+  <description>Dashboard unificado para monitoramento de segurança em tempo real, combinando ameaças em endpoints, anomalias de rede e resultados de varreduras Nmap</description>
+  
+  <row>
+    <panel>
+      <title>Status Geral de Segurança</title>
+      <viz type="status_indicator_app.status_indicator">
+        <search>
+          <![CDATA[
+            | eval incidents=random()%10
+            | eval status=case(incidents>=7, "severe", incidents>=4, "elevated", incidents>=2, "guarded", incidents>=0, "low")
+            | fields status
+          ]]>
+        </search>
+        <option name="status_indicator_app.status_indicator.colorBy">value</option>
+        <option name="status_indicator_app.status_indicator.fillTarget">background</option>
+        <option name="status_indicator_app.status_indicator.fixIcon">warning</option>
+        <option name="status_indicator_app.status_indicator.icon">warning</option>
+        <option name="status_indicator_app.status_indicator.precision">0</option>
+        <option name="status_indicator_app.status_indicator.showOption">1</option>
+        <option name="status_indicator_app.status_indicator.style">backgroundShadow</option>
+        <option name="status_indicator_app.status_indicator.valueColorMapping">[{"from":"severe","value":"#D41F1F","to":""},{"from":"elevated","value":"#F1813F","to":""},{"from":"guarded","value":"#F8BE34","to":""},{"from":"low","value":"#53A051","to":""}]</option>
+      </viz>
+    </panel>
+    
+    <panel>
+      <title>Alertas Ativos</title>
+      <single>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux sourcetype=*audit* OR sourcetype=*sysmon* 
+              | regex TargetFilename=".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"
+              | stats count]
+              [search index=windows (EventCode=4688 OR sourcetype=xmlwineventlog)
+              | regex CommandLine="(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"
+              | stats count]
+              [search index=network sourcetype=ids OR sourcetype=firewall action=blocked
+              | stats count]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip
+              | mvexpand ports=ports.port
+              | spath input=ports.portid output=port
+              | spath input=ports.state output=state
+              | spath input=ports.critical output=critical
+              | where state="open" AND critical="true"
+              | stats count]
+            | stats sum(count) as total_alerts
+          ]]>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="rangeValues">[0,10,30]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unit">alertas</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">1</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    
+    <panel>
+      <title>Hosts em Risco</title>
+      <single>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux (sourcetype=*audit* OR sourcetype=*sysmon* OR EventCode=4688 OR sourcetype=xmlwineventlog)
+              | stats dc(host) as hosts_count]
+              [search index=network sourcetype=ids OR sourcetype=firewall action=blocked
+              | stats dc(src_ip) as src_hosts_count]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip
+              | mvexpand ports=ports.port
+              | spath input=ports.portid output=port
+              | spath input=ports.state output=state
+              | spath input=ports.critical output=critical
+              | where state="open" AND critical="true"
+              | stats dc(ip) as ip_hosts_count]
+            | stats max(hosts_count) as host_count, max(src_hosts_count) as src_count, max(ip_hosts_count) as ip_count
+            | eval total_hosts=if(isnotnull(host_count), host_count, 0) + if(isnotnull(src_count), src_count, 0) + if(isnotnull(ip_count), ip_count, 0)
+            | fields total_hosts
+          ]]>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="rangeValues">[0,5,15]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unit">hosts</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">1</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    
+    <panel>
+      <title>Portas Críticas Expostas</title>
+      <single>
+        <search>
+          <![CDATA[
+            index=nmap sourcetype="json_scan"
+            | spath input=host.@addr output=ip
+            | mvexpand ports=ports.port
+            | spath input=ports.portid output=port
+            | spath input=ports.state output=state
+            | spath input=ports.critical output=critical
+            | where state="open" AND critical="true"
+            | stats dc(port) as unique_critical_ports
+          ]]>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="rangeValues">[0,3,8]</option>
+        <option name="unit">portas</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Distribuição de Alertas por Tipo</title>
+      <chart>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux sourcetype=*audit* OR sourcetype=*sysmon* 
+              | regex TargetFilename=".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"
+              | stats count
+              | eval category="Modificação de Arquivos Críticos"]
+              [search index=windows (EventCode=4688 OR sourcetype=xmlwineventlog)
+              | regex CommandLine="(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"
+              | stats count
+              | eval category="PowerShell Suspeito"]
+              [search index=windows EventCode=4625 OR index=linux sourcetype=*auth*
+              | stats count
+              | eval category="Falhas de Login"]
+              [search index=network sourcetype=firewall OR sourcetype=proxy
+              | lookup threat_intelligence dest_ip OUTPUT is_malicious
+              | where is_malicious="true"
+              | stats count
+              | eval category="Comunicação Maliciosa"]
+              [search index=network sourcetype=ids OR sourcetype=firewall action=blocked
+              | stats count
+              | eval category="Tráfego Bloqueado"]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip
+              | mvexpand ports=ports.port
+              | spath input=ports.portid output=port
+              | spath input=ports.state output=state
+              | spath input=ports.critical output=critical
+              | where state="open" AND critical="true"
+              | stats count
+              | eval category="Portas Críticas Expostas"]
+            | stats sum(count) by category
+            | sort -sum(count)
+          ]]>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+    
+    <panel>
+      <title>Timeline de Eventos de Segurança (Últimas 24h)</title>
+      <chart>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux sourcetype=*audit* OR sourcetype=*sysmon* OR EventCode=4688 OR EventCode=4625 
+              | eval type="Endpoint"]
+              [search index=network sourcetype=firewall OR sourcetype=ids
+              | eval type="Network"]
+              [search index=nmap sourcetype="json_scan"
+              | eval type="Nmap"]
+            | timechart span=30m count by type
+          ]]>
+        </search>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Mapa Global de Ameaças</title>
+      <map>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows EventCode=4625 OR index=linux sourcetype=*auth*
+              | fields src_ip
+              | rename src_ip as ip]
+              [search index=network sourcetype=firewall OR sourcetype=ids OR sourcetype=proxy
+              | fields src_ip
+              | rename src_ip as ip]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip]
+            | where isnotnull(ip) AND ip!=""
+            | iplocation ip
+            | stats count by Country, lat, lon
+            | geom geo_countries featureIdField=Country
+          ]]>
+        </search>
+        <option name="mapping.choroplethLayer.colorBins">5</option>
+        <option name="mapping.choroplethLayer.colorMode">sequential</option>
+        <option name="mapping.choroplethLayer.maximumColor">0xDB5800</option>
+        <option name="mapping.choroplethLayer.minimumColor">0x2F25BA</option>
+        <option name="mapping.choroplethLayer.neutralPoint">0</option>
+        <option name="mapping.choroplethLayer.shapeOpacity">0.75</option>
+        <option name="mapping.choroplethLayer.showBorder">1</option>
+        <option name="mapping.data.maxClusters">100</option>
+        <option name="mapping.drilldown">all</option>
+        <option name="mapping.map.center">(0,0)</option>
+        <option name="mapping.map.zoom">2</option>
+        <option name="mapping.markerLayer.markerMaxSize">50</option>
+        <option name="mapping.markerLayer.markerMinSize">10</option>
+        <option name="mapping.markerLayer.markerOpacity">0.8</option>
+        <option name="mapping.showTiles">1</option>
+        <option name="mapping.type">choropleth</option>
+      </map>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Top Hosts em Risco</title>
+      <table>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux (sourcetype=*audit* OR sourcetype=*sysmon* OR EventCode=4688 OR sourcetype=xmlwineventlog)
+              | eval risk_type=case(
+                  match(CommandLine, "(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"), "PowerShell Malicioso",
+                  match(TargetFilename, ".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"), "Modificação de Arquivos Críticos",
+                  EventCode=4625, "Falha de Login",
+                  1=1, "Outro")
+              | stats count as issues by host, risk_type
+              | eval source="Endpoint"]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip
+              | spath input=host.hostname output=hostname
+              | mvexpand ports=ports.port
+              | spath input=ports.portid output=port
+              | spath input=ports.state output=state
+              | spath input=ports.critical output=critical
+              | where state="open" AND critical="true"
+              | stats count as issues by ip
+              | eval host=ip, risk_type="Porta Crítica Exposta", source="Nmap"]
+              [search index=network sourcetype=firewall OR sourcetype=ids OR sourcetype=proxy
+              | eval risk_type=case(
+                  action="blocked", "Tráfego Bloqueado",
+                  match(dest_port, "^(22|23|3389|5900)$"), "Acesso a Serviço Remoto",
+                  1=1, "Tráfego Suspeito")
+              | stats count as issues by src_ip, risk_type
+              | eval host=src_ip, source="Network"]
+            | stats sum(issues) as total_issues, values(risk_type) as risk_types by host, source
+            | sort -total_issues
+            | head 10
+            | rename host as "Host", source as "Origem", total_issues as "Total de Problemas", risk_types as "Tipos de Risco"
+          ]]>
+        </search>
+        <option name="drilldown">row</option>
+      </table>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Painéis de Segurança Especializados</title>
+      <html>
+        <![CDATA[
+        <div style="padding: 20px 0;">
+          <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px; margin: 0 10px 20px 0; background-color: #1A1E23; border-radius: 5px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+              <h3 style="margin-top: 0; color: #5FBEF0;">Endpoint Threats</h3>
+              <p style="color: #DDD;">Monitoramento de ameaças em endpoints, processos suspeitos e alterações de segurança.</p>
+              <div style="text-align: center; margin-top: 15px;">
+                <a href="/app/search/endpoint-threats" class="btn btn-primary" style="background-color: #3C444D; color: white; padding: 8px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Acessar</a>
+              </div>
+            </div>
+            
+            <div style="flex: 1; min-width: 200px; margin: 0 10px 20px 0; background-color: #1A1E23; border-radius: 5px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+              <h3 style="margin-top: 0; color: #5FBEF0;">Network Anomalies</h3>
+              <p style="color: #DDD;">Detecção de comportamentos anômalos na rede, tráfego suspeito e comunicações maliciosas.</p>
+              <div style="text-align: center; margin-top: 15px;">
+                <a href="/app/search/network-anomalies" class="btn btn-primary" style="background-color: #3C444D; color: white; padding: 8px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Acessar</a>
+              </div>
+            </div>
+            
+            <div style="flex: 1; min-width: 200px; margin: 0 10px 20px 0; background-color: #1A1E23; border-radius: 5px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+              <h3 style="margin-top: 0; color: #5FBEF0;">Nmap Security Scan</h3>
+              <p style="color: #DDD;">Análise de resultados de varreduras Nmap, portas abertas e vulnerabilidades descobertas.</p>
+              <div style="text-align: center; margin-top: 15px;">
+                <a href="/app/search/nmap_alerts" class="btn btn-primary" style="background-color: #3C444D; color: white; padding: 8px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Acessar</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        ]]>
+      </html>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Eventos de Segurança Recentes (Últimos 50)</title>
+      <table>
+        <search>
+          <![CDATA[
+            | union 
+              [search index=windows OR index=linux sourcetype=*audit* OR sourcetype=*sysmon* OR EventCode=4688 OR EventCode=4625 OR EventCode=4624
+              | eval type="Endpoint", source=host, details=case(
+                  match(CommandLine, "(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"), "PowerShell suspeito: ".CommandLine,
+                  match(TargetFilename, ".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"), "Modificação de arquivo crítico: ".TargetFilename,
+                  EventCode=4625, "Falha de login: ".user,
+                  EventCode=4624, "Login bem-sucedido: ".user,
+                  1=1, "Evento de segurança: ".EventCode)
+              | fields _time type source details]
+              [search index=network sourcetype=firewall OR sourcetype=ids OR sourcetype=proxy
+              | eval type="Network", source=src_ip, details=case(
+                  action="blocked", "Tráfego bloqueado para ".dest_ip.":".dest_port,
+                  isnotnull(dest_ip), "Comunicação com ".dest_ip.":".dest_port." (".app.")",
+                  1=1, "Evento de rede")
+              | fields _time type source details]
+              [search index=nmap sourcetype="json_scan"
+              | spath input=host.@addr output=ip
+              | spath input=host.hostname output=hostname
+              | mvexpand ports=ports.port
+              | spath input=ports.portid output=port
+              | spath input=ports.state output=state
+              | spath input=ports.service output=service
+              | spath input=ports.critical output=critical
+              | where state="open"
+              | eval type="Nmap", source=ip, details="Porta ".port." (".service.") aberta".(if(critical="true", " [CRÍTICA]", ""))
+              | fields _time type source details]
+            | sort -_time
+            | head 50
+            | rename _time as "Horário", type as "Tipo", source as "Origem", details as "Detalhes"
+          ]]>
+        </search>
+        <option name="count">20</option>
+        <option name="drilldown">row</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">true</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

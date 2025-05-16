@@ -1,0 +1,263 @@
+/**
+ * Windows Lateral Movement Detection Queries
+ * Autor: Felipe Miranda
+ * Data: 2025-05-13
+ * 
+ * Este conjunto de queries SPL detecta técnicas comuns de movimento lateral em ambientes Windows,
+ * incluindo uso de ferramentas de administração remota, pass-the-hash, RDP, e outras técnicas
+ * utilizadas por adversários para se propagar em redes corporativas.
+ */
+
+//
+// 1. Detecção de Movimento Lateral via WMI
+//
+
+/**
+ * Execução Remota via WMI
+ * Detecta processo wmic.exe sendo usado para execução remota
+ */
+index=windows (EventCode=4688 OR EventCode=1) (Process_Name="*wmic.exe" OR OriginalFileName="wmic.exe")
+| rex field=CommandLine "(?i).*\s+/node:(?:[\"'])?(?<target_host>[^\"'\s]+)(?:[\"'])?\s+.*process\s+(?:call\s+create|exec|start)\s+(?:[\"'])?(?<command_run>[^\"']+)(?:[\"'])?"
+| search target_host=* command_run=*
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, user, target_host, command_run
+| eval technique="Windows Management Instrumentation", mitre_id="T1047", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Criação de Processo WmiPrvSE ou WmiApSrv
+ * Detecta atividade WMI do lado do alvo
+ */
+index=windows (EventCode=4688 OR EventCode=1) (Process_Name="*WmiPrvSE.exe" OR Process_Name="*WmiApSrv.exe") host=*
+| stats count values(Process_Name) min(_time) as firstTime max(_time) as lastTime by Computer, ParentProcessId
+| join ParentProcessId [search index=windows (EventCode=4688 OR EventCode=1) | rename ProcessId as ParentProcessId | fields ParentProcessId, Process_Name, CommandLine]
+| eval technique="Windows Management Instrumentation", mitre_id="T1047", tactic="Lateral Movement"
+| sort - count
+
+//
+// 2. Detecção de uso de PsExec
+//
+
+/**
+ * Execução Remota via PsExec
+ * Detecta uso da ferramenta PsExec para execução remota
+ */
+index=windows (EventCode=4688 OR EventCode=1) (Process_Name="*psexec.exe" OR Process_Name="*psexesvc.exe" OR OriginalFileName="psexec.exe") 
+| rex field=CommandLine "(?i).*\s+\\\\(?<target_host>[^\\\s]+).*\s+-[suepn]{1,5}\s+(?<command_args>.+)"
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, user, target_host, CommandLine
+| eval technique="Remote Services: SMB/Windows Admin Shares", mitre_id="T1021.002", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Serviço PsExec Registrado
+ * Detecta quando o serviço PsExec é registrado no alvo
+ */
+index=windows EventCode=7045 Service_Name="PSEXESVC" OR Service_File_Name="*PSEXESVC.exe"
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, Service_Name, Service_File_Name
+| eval technique="Remote Services: SMB/Windows Admin Shares", mitre_id="T1021.002", tactic="Lateral Movement"
+| sort - count
+
+//
+// 3. Detecção de Pass-the-Hash/Pass-the-Ticket
+//
+
+/**
+ * Logons de Rede com NTLM Potencialmente PTH
+ * Detecta padrões de logon que podem indicar Pass-the-Hash
+ */
+index=windows EventCode=4624 LogonType=3 AuthenticationPackageName=NTLM
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, TargetUserName, IpAddress
+| join type=left TargetUserName [
+    search index=windows EventCode=4624 LogonType=2 
+    | stats count as interactive_logons by TargetUserName
+    | eval has_interactive=if(interactive_logons>0, "yes", "no")
+    | fields TargetUserName, has_interactive
+]
+| where has_interactive="yes"
+| stats count values(Computer) as targets by TargetUserName, IpAddress
+| where count > 2
+| eval technique="Use Alternate Authentication Material: Pass the Hash", mitre_id="T1550.002", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Criação de Processo LSASS com padrões suspeitos de Mimikatz
+ * Detecta potencial uso de Mimikatz para extração de hashes
+ */
+index=windows (EventCode=4688 OR EventCode=1) 
+| search (Process_Name="*lsass.exe" AND ParentProcessName\!="*wininit.exe") OR 
+         CommandLine="*sekurlsa*" OR 
+         CommandLine="*kerberos*" OR 
+         CommandLine="*mimikatz*" OR
+         CommandLine="*privilege::debug*"
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, user, Process_Name, CommandLine
+| eval technique="OS Credential Dumping", mitre_id="T1003", tactic="Credential Access"
+| sort - count
+
+//
+// 4. Detecção de Movimento Lateral via RDP
+//
+
+/**
+ * Conexões RDP de Origem para Múltiplos Destinos
+ * Detecta padrões de origem RDP conectando a múltiplos hosts
+ */
+index=windows (EventCode=4624 OR EventCode=1149) LogonType=10 OR (LogonType=3 AuthenticationPackageName=Negotiate)
+| stats count values(Computer) as target_hosts min(_time) as firstTime max(_time) as lastTime by SourceIP, TargetUserName
+| where mvcount(target_hosts) > 3
+| eval technique="Remote Services: Remote Desktop Protocol", mitre_id="T1021.001", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Conexões RDP Usando Contas Diferentes
+ * Detecta vários usuários conectando de um mesmo endereço IP
+ */
+index=windows (EventCode=4624 OR EventCode=1149) LogonType=10 OR (LogonType=3 AuthenticationPackageName=Negotiate)
+| stats count values(TargetUserName) as users min(_time) as firstTime max(_time) as lastTime by SourceIP, Computer
+| where mvcount(users) > 3
+| eval technique="Remote Services: Remote Desktop Protocol", mitre_id="T1021.001", tactic="Lateral Movement"
+| sort - count
+
+//
+// 5. Detecção de Movimento Lateral via Compartilhamentos Administrativos
+//
+
+/**
+ * Acessos a Compartilhamentos Administrativos
+ * Detecta acesso a compartilhamentos C$, ADMIN$, etc.
+ */
+index=windows EventCode=5140 ShareName IN ("\\\\*\\C$", "\\\\*\\ADMIN$", "\\\\*\\IPC$") ObjectType=File
+| stats count min(_time) as firstTime max(_time) as lastTime values(ShareName) as shares by Computer, SubjectUserName, IpAddress
+| eval technique="Remote Services: SMB/Windows Admin Shares", mitre_id="T1021.002", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Criação de Arquivos em Compartilhamentos Administrativos
+ * Detecta uploads de arquivos para compartilhamentos administrativos
+ */
+index=windows EventCode=5145 ShareName IN ("\\\\*\\C$", "\\\\*\\ADMIN$") AccessMask="0x2" OR AccessMask="0x100"
+| rex field=RelativeTargetName "(?<file_name>[^\\]+)$"
+| stats count min(_time) as firstTime max(_time) as lastTime values(file_name) as created_files by Computer, SubjectUserName, IpAddress, ShareName
+| eval technique="Remote Services: SMB/Windows Admin Shares", mitre_id="T1021.002", tactic="Lateral Movement"
+| sort - count
+
+//
+// 6. Detecção de Uso de Ferramentas Remotas
+//
+
+/**
+ * Execução de Ferramentas de Acesso Remoto
+ * Detecta uso de várias ferramentas de administração remota
+ */
+index=windows (EventCode=4688 OR EventCode=1) 
+Process_Name IN ("*at.exe", "*sc.exe", "*winrs.exe", "*schtasks.exe") 
+| search CommandLine="*\\\\*"
+| rex field=CommandLine "(?i).*\\\\(?<target_host>[^\\\s]+).*"
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, target_host, user, Process_Name, CommandLine
+| eval technique="Remote Services: SMB/Windows Admin Shares", mitre_id="T1021.002", tactic="Lateral Movement"
+| sort - count
+
+/**
+ * Powershell com Comandos de Acesso Remoto
+ * Detecta o uso do PowerShell para comunicação remota
+ */
+index=windows (EventCode=4688 OR EventCode=1) Process_Name="*powershell.exe" 
+(CommandLine="*-ComputerName*" OR CommandLine="*Invoke-Command*" OR CommandLine="*Enter-PSSession*" OR CommandLine="*New-PSSession*")
+| rex field=CommandLine "(?i).*(?:ComputerName|\-ComputerName|\-Cn)\s+(?:[\"'])?(?<target_host>[^,\"'\s]+)(?:[\"'])?.*"
+| search target_host=*
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, user, target_host, CommandLine
+| eval technique="Remote Services: PowerShell Remoting", mitre_id="T1021.006", tactic="Lateral Movement"
+| sort - count
+
+//
+// 7. Detecção de Movimentos Laterais via DCOM
+//
+
+/**
+ * Execução Remota via DCOM
+ * Detecta uso do DCOM para execução remota
+ */
+index=windows (EventCode=4688 OR EventCode=1) 
+| search CommandLine="*-ExecutionPolicy*" OR CommandLine="*DCOMRemoteCreateInstance*" OR CommandLine="*MMC20.Application*" 
+  OR CommandLine="*ShellWindows*" OR CommandLine="*ShellBrowserWindow*" OR CommandLine="*9BA05972-F6A8-11CF-A442-00A0C90A8F39*"
+| stats count min(_time) as firstTime max(_time) as lastTime by Computer, user, CommandLine
+| eval technique="Remote Services: Distributed Component Object Model", mitre_id="T1021.003", tactic="Lateral Movement"
+| sort - count
+
+//
+// 8. Análise de Conexões de Firewall
+//
+
+/**
+ * Conexões de Rede Suspeitas entre Hosts
+ * Detecta padrões incomuns de tráfego entre hosts internos
+ */
+index=firewall OR index=network dest_port IN (445, 135, 139, 3389, 5985, 5986) action=allowed
+| stats count min(_time) as firstTime max(_time) as lastTime by src_ip, dest_ip, dest_port
+| eval service_type=case(
+    dest_port=445, "SMB",
+    dest_port=135, "RPC",
+    dest_port=139, "NetBIOS",
+    dest_port=3389, "RDP",
+    dest_port IN (5985, 5986), "WinRM",
+    1=1, "Unknown"
+)
+| eval technique="Lateral Movement", tactic="Lateral Movement"
+| sort - count
+
+//
+// 9. Análise Temporal e Sequencial
+//
+
+/**
+ * Sequência de Evento de Autenticação Seguido por Execução
+ * Detecta logon remoto seguido de execução de processo em curto intervalo
+ */
+index=windows (EventCode=4624 LogonType=3) 
+| stats min(_time) as logon_time by Computer, TargetUserName, SourceIP
+| join Computer [
+    search index=windows (EventCode=4688 OR EventCode=1) 
+    | rex field=_time "(?<exec_time>\d+)"
+    | fields Computer, user, Process_Name, CommandLine, exec_time
+]
+| eval time_diff=exec_time-logon_time
+| where time_diff > 0 AND time_diff < 60
+| eval technique="Lateral Movement", tactic="Lateral Movement"
+| sort - time_diff
+
+//
+// 10. Padrões de Movimentação em Rede
+//
+
+/**
+ * Padrão de "Hopping" entre Hosts
+ * Detecta potencial movimento de um host para outro e depois para um terceiro
+ */
+index=windows (EventCode=4624 LogonType=3) 
+| stats count values(SourceHostName) as source_hosts min(_time) as firstTime max(_time) as lastTime by TargetUserName, Computer
+| where mvcount(source_hosts) > 1
+| eval technique="Lateral Movement", tactic="Lateral Movement", mitre_id="TA0008"
+| sort - firstTime
+
+//
+// 11. Correlações Multi-Evento
+//
+
+/**
+ * Hosts com Múltiplas Técnicas de Movimento Lateral
+ * Detecta alvos que exibem vários indicadores de movimento lateral
+ */
+index=windows 
+| eval lateral_movement_type=case(
+    (EventCode=4624 AND LogonType=3), "Network Logon",
+    (EventCode=4624 AND LogonType=10), "RDP",
+    (EventCode=5140 AND match(ShareName, "\\\\.*\\(C|ADMIN)\$")), "Admin Share",
+    (Process_Name="*psexec.exe" OR Process_Name="*psexesvc.exe"), "PsExec",
+    (Process_Name="*wmic.exe" AND match(CommandLine, ".*node.*process")), "WMI",
+    (Process_Name="*powershell.exe" AND (match(CommandLine, ".*Enter-PSSession.*") OR match(CommandLine, ".*Invoke-Command.*"))), "PowerShell Remoting",
+    1=1, NULL()
+)
+| search lateral_movement_type=*
+| stats count values(lateral_movement_type) as techniques by Computer
+| where mvcount(techniques) > 1
+| eval technique="Multiple Lateral Movement Techniques", mitre_id="TA0008", tactic="Lateral Movement"
+| sort - count
+EOF < /dev/null

@@ -1,0 +1,15 @@
+---
+- name: Verificações após aplicar role common
+  hosts: all
+  gather_facts: false
+  tasks:
+
+    - name: Verifica se timezone está aplicado corretamente
+      ansible.builtin.command: timedatectl
+      register: timedate_output
+
+    - name: Checa se timezone contém "{{ timezone }}"
+      ansible.builtin.assert:
+        that:
+          - '"{{ timezone }}" in timedate_output.stdout'
+        fail_msg: "Timezone não foi aplicado corretamente"

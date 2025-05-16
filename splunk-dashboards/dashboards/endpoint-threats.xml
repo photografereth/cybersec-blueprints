@@ -1,0 +1,146 @@
+<dashboard>
+  <label>Endpoint Threats</label>
+  <description>Monitoramento de eventos de segurança em endpoints</description>
+  
+  <row>
+    <panel>
+      <title>Contagem de Processos Suspeitos por Host</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=windows (EventCode=4688 OR sourcetype=xmlwineventlog) 
+            | regex CommandLine="(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"
+            | stats count by Computer
+            | sort -count
+            | head 10
+          ]]>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+    
+    <panel>
+      <title>Conexões de Rede Incomuns</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=windows EventCode=5156 
+            | stats count by SourceAddress, DestAddress, DestPort
+            | where NOT match(DestAddress, "^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)") 
+              AND count < 5
+            | sort -count
+            | head 10
+          ]]>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Modificações em Arquivos Críticos</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=windows OR index=linux 
+            sourcetype=*audit* OR sourcetype=*sysmon* 
+            | regex TargetFilename=".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"
+            | stats count by host, TargetFilename, user
+            | sort -count
+          ]]>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Execução de PowerShell Suspeita</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=windows (EventCode=4688 OR sourcetype=xmlwineventlog)
+            | regex CommandLine="(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"
+            | table _time Computer Account CommandLine ParentProcessName
+            | sort - _time
+          ]]>
+        </search>
+      </table>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Logins com Falha</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=windows EventCode=4625 OR index=linux sourcetype=*auth*
+            | stats count by host, user, src_ip
+            | where count > 3
+            | sort -count
+          ]]>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+    
+    <panel>
+      <title>Logins Bem-Sucedidos por Usuário e Origem</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=windows EventCode=4624 OR index=linux sourcetype=*auth* successful
+            | stats count by user, src_ip
+            | sort -count
+          ]]>
+        </search>
+        <option name="charting.chart">bubble</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Timeline de Atividades por Criticidade</title>
+      <chart>
+        <search>
+          <![CDATA[
+            (index=windows OR index=linux) 
+            (EventCode=4688 OR EventCode=4625 OR EventCode=4624 OR sourcetype=*audit* OR sourcetype=*sysmon*)
+            | eval severity=case(
+                match(CommandLine, "(?i)(powershell\s+.*(hidden|encode|webclient|downloadstring|bypass))"), "Critical",
+                match(TargetFilename, ".*(boot\.ini|win\.ini|system32|etc|passwd|shadow|hosts|sudoers).*"), "High",
+                EventCode=4625, "Medium",
+                1=1, "Low")
+            | timechart span=1h count by severity
+          ]]>
+        </search>
+        <option name="charting.chart">area</option>
+        <option name="charting.drilldown">all</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Processos Executados com Privilégios Elevados</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=windows EventCode=4688 
+            | where TokenElevationType="%%1936" OR TokenElevationType="TokenElevationTypeDefault"
+            | stats count by Process, Account, Computer
+            | sort -count
+            | head 20
+          ]]>
+        </search>
+      </table>
+    </panel>
+  </row>
+</dashboard>

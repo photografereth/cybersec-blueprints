@@ -1,0 +1,108 @@
+---
+# sysctl/tasks/main.yml
+# Configuração de parâmetros de kernel para segurança de rede
+
+- name: Verificar existência do arquivo sysctl.conf
+  stat:
+    path: /etc/sysctl.conf
+  register: sysctl_conf
+  tags:
+    - sysctl
+    - network
+    - security
+
+- name: Fazer backup do arquivo sysctl.conf
+  copy:
+    src: /etc/sysctl.conf
+    dest: /etc/sysctl.conf.bak
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0644'
+  when: sysctl_conf.stat.exists
+  tags:
+    - sysctl
+    - network
+    - security
+
+- name: Garantir que o diretório /etc/sysctl.d existe
+  file:
+    path: /etc/sysctl.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - sysctl
+    - network
+    - security
+
+- name: Criar arquivo de configuração de sysctl para segurança
+  copy:
+    content: |
+      # Arquivo gerenciado por Ansible - Não edite manualmente
+      # Configurações de sysctl para segurança de rede
+      
+      # Desabilitar roteamento de IPv4
+      net.ipv4.ip_forward = {{ sysctl_settings['net.ipv4.ip_forward'] }}
+      
+      # Proteção contra TCP SYN flood
+      net.ipv4.tcp_syncookies = {{ sysctl_settings['net.ipv4.tcp_syncookies'] }}
+      
+      # Ignorar pacotes ICMP
+      net.ipv4.icmp_echo_ignore_broadcasts = {{ sysctl_settings['net.ipv4.icmp_echo_ignore_broadcasts'] }}
+      
+      # Proteção contra source routing
+      net.ipv4.conf.all.accept_source_route = {{ sysctl_settings['net.ipv4.conf.all.accept_source_route'] }}
+      net.ipv4.conf.default.accept_source_route = {{ sysctl_settings['net.ipv4.conf.default.accept_source_route'] }}
+      
+      # Proteção contra ataques de spoofing
+      net.ipv4.conf.all.rp_filter = {{ sysctl_settings['net.ipv4.conf.all.rp_filter'] }}
+      net.ipv4.conf.default.rp_filter = {{ sysctl_settings['net.ipv4.conf.default.rp_filter'] }}
+      
+      # Registro de pacotes martian
+      net.ipv4.conf.all.log_martians = {{ sysctl_settings['net.ipv4.conf.all.log_martians'] }}
+      
+      # Proteção de memória e recursos
+      kernel.randomize_va_space = {{ sysctl_settings['kernel.randomize_va_space'] }}
+      
+      # Controles adicionais de segurança
+      # Impedir que programas façaam mapeamentos para endereços de baixa memória
+      vm.mmap_min_addr = 4096
+      
+      # Desabilitar magic-sysrq key
+      kernel.sysrq = 0
+      
+      # Desabilitar core dumps para programas setuid
+      fs.suid_dumpable = 0
+      
+      # Desabilitar o envio de redirecionamentos ICMP
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+      
+      # Desabilitar aceitação de redirecionamentos ICMP
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      
+      # Desabilitar aceitação de redirecionamentos ICMP seguros
+      net.ipv4.conf.all.secure_redirects = 0
+      net.ipv4.conf.default.secure_redirects = 0
+    dest: /etc/sysctl.d/99-security.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload sysctl
+  tags:
+    - sysctl
+    - network
+    - security
+
+- name: Aplicar configurações de sysctl imediatamente
+  command: sysctl -p /etc/sysctl.d/99-security.conf
+  register: sysctl_apply
+  changed_when: sysctl_apply.rc == 0
+  failed_when: sysctl_apply.rc != 0
+  tags:
+    - sysctl
+    - network
+    - security

@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  nmkit:
+    build: .
+    volumes:
+    - .:/app
+    working_dir: /app
+    tty: true
+
+# Use docker-compose run nmkit bash para abrir shell no container

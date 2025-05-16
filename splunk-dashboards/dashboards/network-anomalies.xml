@@ -1,0 +1,179 @@
+<dashboard>
+  <label>Network Anomalies</label>
+  <description>Detecção e visualização de anomalias na rede e comunicações suspeitas</description>
+  
+  <row>
+    <panel>
+      <title>Tráfego por País</title>
+      <map>
+        <search>
+          <![CDATA[
+            index=network sourcetype=firewall OR sourcetype=proxy OR sourcetype=netflow
+            | iplocation dest_ip
+            | stats sum(bytes) as traffic_bytes by Country
+            | geom geo_countries featureIdField=Country
+          ]]>
+        </search>
+        <option name="mapping.type">choropleth</option>
+        <option name="mapping.choroplethLayer.colorMode">sequential</option>
+        <option name="mapping.choroplethLayer.shapeOpacity">0.75</option>
+        <option name="mapping.choroplethLayer.colorBins">5</option>
+      </map>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Comunicações com IPs Maliciosos</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=network sourcetype=firewall OR sourcetype=proxy
+            | lookup threat_intelligence dest_ip OUTPUT is_malicious, threat_type, threat_source
+            | where is_malicious="true"
+            | stats count by src_ip, dest_ip, threat_type, threat_source
+            | sort -count
+          ]]>
+        </search>
+      </table>
+    </panel>
+    
+    <panel>
+      <title>Top Destinos por Volume</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=network sourcetype=netflow OR sourcetype=firewall
+            | stats sum(bytes) as total_bytes by dest_ip
+            | sort -total_bytes
+            | head 10
+            | eval total_MB=round(total_bytes/1024/1024,2)
+            | fields dest_ip, total_MB
+          ]]>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.chart.showDataLabels">all</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Indicadores de Exfiltração de Dados</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=network sourcetype=netflow OR sourcetype=firewall
+            | eval ratio=bytes_out/bytes_in
+            | where ratio > 10 AND bytes_out > 1000000
+            | table _time src_ip dest_ip bytes_in bytes_out ratio app
+            | sort -ratio
+          ]]>
+        </search>
+      </table>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Padrões de Comunicação Incomuns (Horários)</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=network sourcetype=firewall OR sourcetype=proxy
+            | eval hour=strftime(_time, "%H")
+            | stats count by hour, user
+            | eventstats avg(count) as avg_count, stdev(count) as stdev_count by user
+            | eval threshold=avg_count+(stdev_count*2)
+            | where count > threshold
+            | sort -count
+          ]]>
+        </search>
+        <option name="charting.chart">bubble</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Detecção de Varreduras</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=network sourcetype=firewall 
+            | stats dc(dest_port) as unique_ports by src_ip, dest_ip
+            | where unique_ports > 10
+            | sort -unique_ports
+            | head 10
+          ]]>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+    
+    <panel>
+      <title>Tentativas de Força Bruta</title>
+      <table>
+        <search>
+          <![CDATA[
+            index=network (sourcetype=firewall OR sourcetype=ids)
+            | stats count(eval(action="blocked" OR action="denied")) as blocked_count by src_ip, dest_ip, dest_port
+            | where blocked_count > 20
+            | eval service=case(
+                dest_port=22, "SSH",
+                dest_port=3389, "RDP",
+                dest_port=445, "SMB",
+                dest_port=1433, "SQL Server",
+                dest_port=3306, "MySQL",
+                1=1, "Other")
+            | sort -blocked_count
+          ]]>
+        </search>
+      </table>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Acessos a Serviços Críticos</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=network sourcetype=firewall 
+            | where dest_port IN (22, 3389, 445, 1433, 3306, 5432, 27017)
+            | eval service=case(
+                dest_port=22, "SSH",
+                dest_port=3389, "RDP",
+                dest_port=445, "SMB",
+                dest_port=1433, "SQL Server",
+                dest_port=3306, "MySQL",
+                dest_port=5432, "PostgreSQL",
+                dest_port=27017, "MongoDB")
+            | stats count by service, src_ip
+            | sort -count
+          ]]>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+      </chart>
+    </panel>
+  </row>
+  
+  <row>
+    <panel>
+      <title>Anomalias Temporais (Alertas por Hora)</title>
+      <chart>
+        <search>
+          <![CDATA[
+            index=network sourcetype=ids OR sourcetype=firewall action=blocked
+            | timechart span=1h count
+            | predict count future_timespan=0 algorithm=LLP
+            | where count > (upper95(prediction) * 1.2)
+          ]]>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+</dashboard>

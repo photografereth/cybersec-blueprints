@@ -1,0 +1,12 @@
+---
+- name: Verificações de SSH Hardening
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Verifica configuração de PermitRootLogin
+      shell: grep ^PermitRootLogin /etc/ssh/sshd_config
+      register: permit_root
+    - name: Verifica se está como no
+      assert:
+        that:
+          - '"PermitRootLogin no" in permit_root.stdout'

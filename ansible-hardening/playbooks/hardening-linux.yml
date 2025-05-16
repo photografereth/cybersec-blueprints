@@ -1,0 +1,72 @@
+---
+# playbook-linux.yml
+# Playbook principal para aplicar hardening em servidores Linux
+
+- name: Aplicar hardening em servidores Linux
+  hosts: all
+  become: yes
+  become_method: sudo
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Verificar conexão e privilégios sudo
+      ping:
+      register: ping_result
+      
+    - name: Verificar sistema operacional suportado
+      fail:
+        msg: "Sistema operacional não suportado: {{ ansible_distribution }}"
+      when: ansible_distribution != 'Ubuntu' and ansible_distribution != 'Debian' and ansible_distribution != 'CentOS' and ansible_distribution != 'RedHat'
+      
+    - name: Exibir informações do sistema
+      debug:
+        msg: "Aplicando hardening em {{ ansible_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }})"
+
+  roles:
+    - role: common
+      tags: 
+        - common
+        - always
+      
+    - role: ssh_hardening
+      tags: 
+        - ssh
+        - security
+      
+    - role: auditd
+      tags: 
+        - audit
+        - security
+      
+    - role: sysctl
+      tags: 
+        - sysctl
+        - network
+        - security
+
+  post_tasks:
+    - name: Verificar serviços críticos de segurança
+      service_facts:
+      
+    - name: Verificar status do auditd
+      debug:
+        msg: "AVISO: auditd não está em execução!"
+      when: ansible_facts.services['auditd.service'] is defined and ansible_facts.services['auditd.service'].state != 'running'
+      
+    - name: Verificar status do SSH
+      debug:
+        msg: "AVISO: sshd não está em execução!"
+      when: ansible_facts.services['sshd.service'] is defined and ansible_facts.services['sshd.service'].state != 'running'
+      
+    - name: Resumo do hardening aplicado
+      debug:
+        msg: |
+          Hardening aplicado com sucesso em {{ ansible_hostname }}
+          Sistema: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          
+          Roles aplicadas:
+          - common
+          - ssh_hardening
+          - auditd
+          - sysctl

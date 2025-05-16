@@ -1,0 +1,186 @@
+/**
+ * Linux Persistence Detection Queries
+ * Autor: Felipe Miranda
+ * Data: 2025-05-13
+ * 
+ * Este conjunto de queries SPL detecta técnicas de persistência comuns em sistemas Linux,
+ * incluindo job scheduling, modificações de sistema de inicialização, alteração de arquivos
+ * de configuração de usuário, e outros mecanismos de persistência.
+ */
+
+//
+// 1. Detecção de Cron Jobs Suspeitos
+//
+
+/**
+ * Cron Jobs Recém-Criados
+ * Detecta novos cron jobs adicionados por usuários
+ */
+index=linux (sourcetype=syslog OR sourcetype="linux_secure") ("CRON" OR "/etc/cron") 
+| rex field=_raw "(?<user>\w+).*?(?<action>ADD|LIST|REPLACE|REMOVE).*?(?<cron_target>crontab for|cron\.daily|cron\.hourly|cron\.monthly|cron\.weekly)"
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, action, cron_target
+| eval technique="Scheduled Task/Job: Cron", mitre_id="T1053.003"
+| sort - firstTime
+
+/**
+ * Modificações em /etc/crontab ou /etc/cron.d/
+ * Identifica alterações em arquivos cron do sistema
+ */
+index=linux (sourcetype=auditd OR sourcetype=syslog) path IN ("/etc/crontab", "/etc/cron.d/*", "/etc/cron.daily/*", "/etc/cron.hourly/*")
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Scheduled Task/Job: Cron", mitre_id="T1053.003"
+| sort - firstTime
+
+//
+// 2. Modificações em Arquivos de Inicialização do Sistema
+//
+
+/**
+ * Alterações em arquivos systemd
+ * Detecta alterações em unidades systemd que podem indicar persistência
+ */
+index=linux sourcetype=auditd path IN ("/etc/systemd/system/*", "/usr/lib/systemd/system/*", "/lib/systemd/system/*") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Boot or Logon Autostart Execution: Systemd Service", mitre_id="T1543.002"
+| sort - firstTime
+
+/**
+ * Alterações em scripts init.d
+ * Detecta modificações em arquivos init que iniciam na partida do sistema
+ */
+index=linux sourcetype=auditd path IN ("/etc/init.d/*", "/etc/rc*.d/*") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Boot or Logon Autostart Execution: RC Scripts", mitre_id="T1037.004"
+| sort - firstTime
+
+//
+// 3. Modificações em Arquivos de Perfil do Usuário
+//
+
+/**
+ * Arquivos de inicialização de shell modificados
+ * Detecta alterações em arquivos como .bashrc, .bash_profile, .profile que são executados no login
+ */
+index=linux sourcetype=auditd path IN ("*.bashrc", "*.bash_profile", "*.profile", "*.zshrc", "/etc/profile", "/etc/bash.bashrc") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Event Triggered Execution: .bash_profile and .bashrc", mitre_id="T1546.004"
+| sort - firstTime
+
+//
+// 4. Modificações em SSH
+//
+
+/**
+ * Alterações em authorized_keys
+ * Detecta adições de chaves SSH que permitem login sem senha
+ */
+index=linux sourcetype=auditd path="*/.ssh/authorized_keys" 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="SSH Authorized Keys", mitre_id="T1098.004"
+| sort - firstTime
+
+//
+// 5. Alterações no Kernel
+//
+
+/**
+ * Detecção de carregamento de módulos do kernel
+ * Identifica módulos do kernel recém-carregados que podem incluir rootkits
+ */
+index=linux (sourcetype=syslog OR sourcetype=messages) ("insmod" OR "modprobe" OR "kernel: module" OR "lsmod") 
+| rex field=_raw "(?<module_name>\w+)\.ko"
+| stats count min(_time) as firstTime max(_time) as lastTime by host, source, module_name, user
+| eval technique="Kernel Modules and Extensions", mitre_id="T1547.006"
+| sort - firstTime
+
+//
+// 6. Arquivos Ocultos Suspeitos
+//
+
+/**
+ * Detecção de arquivos ocultos em diretórios incomuns
+ * Encontra arquivos que começam com ponto em locais suspeitos
+ */
+index=linux sourcetype=auditd path IN ("/tmp/.*", "/var/tmp/.*", "/dev/shm/.*") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Masquerading: Hidden Files and Directories", mitre_id="T1564.001"
+| sort - firstTime
+
+//
+// 7. Serviços da Web para Persistência
+//
+
+/**
+ * Alterações em cron jobs para webhooks
+ * Detecta tarefas agendadas que fazem solicitações web
+ */
+index=linux (sourcetype=syslog OR sourcetype="linux_secure") ("CRON" OR "/etc/cron") ("curl" OR "wget" OR "http" OR "https") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, _raw
+| eval technique="Scheduled Task/Job: Cron", mitre_id="T1053.003", tactic="Persistence"
+| sort - firstTime
+
+//
+// 8. Alterações em PAM (Pluggable Authentication Modules)
+//
+
+/**
+ * Modificações em configurações PAM
+ * Identifica alterações nos módulos de autenticação que podem permitir backdoors
+ */
+index=linux sourcetype=auditd path IN ("/etc/pam.d/*", "/etc/security/pam_env.conf", "/etc/security/*") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Pluggable Authentication Modules", mitre_id="T1556.003"
+| sort - firstTime
+
+//
+// 9. Detecção de Corrupção de Arquivos de Log
+//
+
+/**
+ * Acessos suspeitos a arquivos de log
+ * Detecta processos incomuns acessando ou modificando logs
+ */
+index=linux sourcetype=auditd path IN ("/var/log/*") action IN ("write", "unlink", "rename", "truncate") 
+| search NOT [search index=linux sourcetype=auditd path IN ("/var/log/*") | stats count by process | sort - count | head 10 | table process]
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, path, process
+| eval technique="Indicator Removal: File Deletion", mitre_id="T1070.004"
+| sort - firstTime
+
+//
+// 10. Processos Rodando a Partir de Locais Incomuns
+//
+
+/**
+ * Processos executados a partir de diretórios temporários ou não padrão
+ * Identifica binários rodando de locais suspeitos
+ */
+index=linux (sourcetype=ps OR sourcetype=top OR sourcetype=lsof) 
+| rex field=process_path "(?<exec_path>/.*?)"
+| search exec_path IN ("/tmp/*", "/var/tmp/*", "/dev/shm/*", "/var/run/*", "/var/spool/*") 
+| stats count min(_time) as firstTime max(_time) as lastTime by host, user, exec_path, process_name
+| eval technique="Masquerading", mitre_id="T1036"
+| sort - firstTime
+
+//
+// 11. Análise Conjunta e Correlações
+//
+
+/**
+ * Correlação de múltiplas técnicas de persistência
+ * Detecta hosts com múltiplos indicadores de mecanismos de persistência
+ */
+index=linux (sourcetype=auditd OR sourcetype=syslog) 
+(path IN ("/etc/crontab", "/etc/cron.d/*", "*.bashrc", "*.bash_profile", "/etc/systemd/system/*") OR 
+ _raw IN ("insmod", "modprobe", "CRON"))
+| eval persistence_type=case(
+    match(path, "cron"), "Cron Job",
+    match(path, "systemd"), "Systemd Service",
+    match(path, "bashrc|profile"), "Shell Init",
+    match(_raw, "insmod|modprobe"), "Kernel Module",
+    1=1, "Other"
+)
+| stats count values(persistence_type) as techniques by host, user
+| where mvcount(techniques) > 1
+| eval technique="Multiple Persistence Mechanisms", mitre_id="T1078"
+| sort - count
+EOF < /dev/null

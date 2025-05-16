@@ -1,0 +1,106 @@
+# Ansible Hardening - Configurações Globais
+# Estas variáveis serão aplicadas a todos os hosts no inventário
+# Personalize conforme as necessidades do seu ambiente
+
+# Configurações de SSH
+ssh_settings:
+  # Desabilitar login como root
+  permit_root_login: "no"
+  # Desabilitar autenticação por senha
+  password_authentication: "no"
+  # Usar apenas o protocolo SSH 2
+  protocol: 2
+  # Definir timeout para sessões ociosas (em segundos)
+  client_alive_interval: 300
+  client_alive_count_max: 3
+  # Número máximo de tentativas de autenticação
+  max_auth_tries: 3
+  # Restringir algoritmos de cifra para apenas os mais seguros
+  ciphers: "aes256-ctr,aes192-ctr,aes128-ctr"
+  # Banner legal para conexões
+  banner_enabled: true
+  banner_path: "/etc/ssh/banner"
+  banner_text: |
+    **************************************************************************
+    * AVISO: Este sistema é restrito apenas a usuários autorizados.          *
+    * Atividades não autorizadas são estritamente proibidas e serão          *
+    * registradas e monitoradas.                                             *
+    **************************************************************************
+
+# Configurações de políticas de senha
+password_policy:
+  min_days: 1
+  max_days: 90
+  min_length: 12
+  remember: 5
+  retry: 3
+
+# Parâmetros de sysctl para segurança
+sysctl_settings:
+  # Desabilitar roteamento de IPv4
+  net.ipv4.ip_forward: 0
+  # Proteção contra TCP SYN flood
+  net.ipv4.tcp_syncookies: 1
+  # Ignorar pacotes ICMP
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  # Proteção contra source routing
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  # Proteção contra ataques de spoofing
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  # Registro de pacotes martian
+  net.ipv4.conf.all.log_martians: 1
+  # Proteção de memória e recursos
+  kernel.randomize_va_space: 2
+
+# Configurações de auditoria
+auditd_settings:
+  # Regras para registrar chamadas de sistema
+  rules:
+    - "-a always,exit -F arch=b64 -S execve -k exec"
+    - "-w /etc/passwd -p wa -k identity"
+    - "-w /etc/shadow -p wa -k identity"
+    - "-w /etc/group -p wa -k identity"
+    - "-w /etc/sudoers -p wa -k sudoers"
+    - "-w /var/log/auth.log -p wa -k auth_log"
+  # Espaço em disco máximo para logs (em MB)
+  max_log_file_size: 50
+  # Ação ao atingir limite de disco
+  disk_full_action: "SYSLOG"
+  # Número máximo de arquivos de log
+  num_logs: 5
+  
+# Pacotes de segurança a instalar
+security_packages:
+  - fail2ban
+  - aide
+  - rkhunter
+  - libpam-pwquality
+  - auditd
+  - apparmor
+  - ufw
+
+# Serviços desnecessários a desabilitar
+services_to_disable:
+  - avahi-daemon
+  - cups
+  - bluetooth
+  - telnet
+  - rsh
+  - nfs
+  - xinetd
+  
+# NTP
+ntp_settings:
+  enabled: true
+  servers:
+    - 0.pool.ntp.org
+    - 1.pool.ntp.org
+    - 2.pool.ntp.org
+  
+# Atualizações automáticas
+automatic_updates:
+  enabled: true
+  security_only: true
+  mail_to: "admin@example.com"

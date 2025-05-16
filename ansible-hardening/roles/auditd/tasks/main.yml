@@ -1,0 +1,168 @@
+---
+# auditd/tasks/main.yml
+# Configuração do sistema de auditoria
+
+- name: Garantir que o auditd está instalado
+  package:
+    name: auditd
+    state: present
+  tags:
+    - audit
+    - security
+
+- name: Fazer backup da configuração do auditd
+  copy:
+    src: /etc/audit/auditd.conf
+    dest: /etc/audit/auditd.conf.bak
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0640'
+  register: auditd_backup
+  failed_when: false  # Pode ser a primeira instalação
+  tags:
+    - audit
+    - security
+
+- name: Configurar tamanho máximo de log do auditd
+  lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^max_log_file\s*=.*'
+    line: "max_log_file = {{ auditd_settings.max_log_file_size }}"
+    state: present
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Configurar ação quando o disco estiver cheio
+  lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^disk_full_action\s*=.*'
+    line: "disk_full_action = {{ auditd_settings.disk_full_action }}"
+    state: present
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Configurar número máximo de arquivos de log
+  lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^num_logs\s*=.*'
+    line: "num_logs = {{ auditd_settings.num_logs }}"
+    state: present
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Fazer backup das regras de auditoria
+  copy:
+    src: /etc/audit/rules.d/audit.rules
+    dest: /etc/audit/rules.d/audit.rules.bak
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0640'
+  register: auditrules_backup
+  failed_when: false  # Arquivo pode não existir ainda
+  tags:
+    - audit
+    - security
+
+- name: Garantir que o diretório de regras existe
+  file:
+    path: /etc/audit/rules.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags:
+    - audit
+    - security
+
+- name: Adicionar regras de auditoria - Monitoramento de chamadas do sistema
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    create: yes
+    owner: root
+    group: root
+    mode: '0640'
+  with_items: "{{ auditd_settings.rules }}"
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Adicionar regras de monitoramento para modificações em binários do sistema
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "-w {{ item }} -p wa -k binaries"
+    create: yes
+    owner: root
+    group: root
+    mode: '0640'
+  with_items:
+    - /usr/bin
+    - /usr/sbin
+    - /bin
+    - /sbin
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Adicionar regras para monitorar alterações em configurações de rede
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "-w {{ item }} -p wa -k network"
+    create: yes
+    owner: root
+    group: root
+    mode: '0640'
+  with_items:
+    - /etc/sysconfig/network
+    - /etc/sysconfig/network-scripts
+    - /etc/network
+  failed_when: false  # Alguns diretórios podem não existir em todas as distribuições
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Adicionar regras para monitorar criação e exclusão de usuários
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "-w /usr/bin/userdel -p x -k user_deletion"
+    create: yes
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Adicionar regras para monitorar alterações de hora do sistema
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "-a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k time-change"
+    create: yes
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart auditd
+  tags:
+    - audit
+    - security
+
+- name: Garantir que auditd inicia na inicialização do sistema
+  service:
+    name: auditd
+    state: started
+    enabled: yes
+  tags:
+    - audit
+    - security

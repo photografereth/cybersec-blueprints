@@ -1,0 +1,26 @@
+---
+# common/handlers/main.yml
+# Handlers para reiniciar serviços após alterações de configuração
+
+- name: restart ntp
+  service:
+    name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'ntp' }}"
+    state: restarted
+  listen: restart ntp
+
+- name: restart sshd
+  service:
+    name: sshd
+    state: restarted
+  listen: restart sshd
+
+- name: reload sysctl
+  command: sysctl -p
+  listen: reload sysctl
+
+- name: restart auditd
+  service:
+    name: auditd
+    state: restarted
+  listen: restart auditd
+EOF < /dev/null

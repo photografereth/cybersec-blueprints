@@ -1,0 +1,168 @@
+---
+# common/tasks/main.yml
+# Tarefas comuns de segurança para todos os hosts
+
+- name: Atualizar cache de repositórios
+  apt:
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+  tags:
+    - updates
+    - common
+
+- name: Instalar pacotes de segurança essenciais
+  package:
+    name: "{{ security_packages }}"
+    state: present
+  tags:
+    - packages
+    - common
+
+- name: Remover pacotes inseguros ou desnecessários
+  package:
+    name:
+      - telnet
+      - rsh-client
+      - rsh-server
+      - nis
+    state: absent
+  tags:
+    - packages
+    - common
+
+- name: Garantir que atualizações de segurança estão habilitadas
+  lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: "^//\\s*\"origin=Ubuntu,archive=.*security\".*"
+    line: "\"origin=Ubuntu,archive=${distro_codename}-security\";"
+    state: present
+  when: 
+    - ansible_os_family == "Debian"
+    - automatic_updates.enabled
+  tags:
+    - updates
+    - common
+
+- name: Configurar atualizações automáticas
+  template:
+    src: templates/20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  when: 
+    - ansible_os_family == "Debian"
+    - automatic_updates.enabled
+  tags:
+    - updates
+    - common
+
+- name: Desabilitar serviços desnecessários
+  service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop: "{{ services_to_disable }}"
+  register: service_disable
+  failed_when: false  # Alguns serviços podem não existir
+  tags:
+    - services
+    - common
+
+- name: Configurar timezone
+  timezone:
+    name: "UTC"
+  tags:
+    - system
+    - common
+
+- name: Instalar NTP
+  package:
+    name: "{{ 'chrony' if ansible_os_family == 'RedHat' else 'ntp' }}"
+    state: present
+  when: ntp_settings.enabled
+  tags:
+    - ntp
+    - common
+
+- name: Configurar servidores NTP
+  template:
+    src: templates/ntp.conf.j2
+    dest: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/ntp.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: ntp_settings.enabled
+  notify: restart ntp
+  tags:
+    - ntp
+    - common
+
+- name: Configurar política de senhas - comprimento mínimo
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: "^# minlen"
+    line: "minlen = {{ password_policy.min_length }}"
+    state: present
+  tags:
+    - passwords
+    - common
+
+- name: Configurar política de senhas - histórico
+  lineinfile:
+    path: /etc/pam.d/common-password
+    regexp: "^password\s+required\s+pam_pwhistory\.so"
+    line: "password required pam_pwhistory.so remember={{ password_policy.remember }}"
+    state: present
+  when: ansible_os_family == "Debian"
+  tags:
+    - passwords
+    - common
+
+- name: Configurar umask padrão mais restritivo
+  lineinfile:
+    path: "{{ item }}"
+    regexp: "^UMASK"
+    line: "UMASK 027"
+    state: present
+  loop:
+    - /etc/login.defs
+    - /etc/profile
+  tags:
+    - permissions
+    - common
+
+- name: Configurar permissões de arquivos críticos
+  file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop:
+    - { path: '/etc/passwd', mode: '0644', owner: 'root', group: 'root' }
+    - { path: '/etc/shadow', mode: '0640', owner: 'root', group: 'shadow' }
+    - { path: '/etc/group', mode: '0644', owner: 'root', group: 'root' }
+    - { path: '/etc/gshadow', mode: '0640', owner: 'root', group: 'shadow' }
+    - { path: '/etc/sudoers', mode: '0440', owner: 'root', group: 'root' }
+  tags:
+    - permissions
+    - common
+
+- name: Configurar banner de login (motd)
+  copy:
+    content: |
+      **************************************************************************
+      *                                                                        *
+      *                   SISTEMA RESTRITO E MONITORADO                        *
+      *                                                                        *
+      * Todas as atividades neste sistema são registradas e monitoradas.       *
+      * Acessos não autorizados são estritamente proibidos.                    *
+      *                                                                        *
+      **************************************************************************
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - system
+    - common

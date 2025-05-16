@@ -1,0 +1,6 @@
+---
+- name: Aplica role ssh_hardening
+  hosts: all
+  become: true
+  roles:
+    - role: ssh_hardening

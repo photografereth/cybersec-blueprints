@@ -1,92 +1,128 @@
+
+**IMPORTANTE** 
+** Este repositório se manterá privado até que o projeto tenha sido concluído e aprovado pelo diretor de TI, garantindo a ética e que não ofereça riscos de cair em mãos erradas.**
+
 # CyberSec Blueprints
 
-**Repositório prático para profissionais e entusiastas de cibersegurança defensiva (blue team).**  
-Inclui automações com Nmap, playbooks Ansible para hardening, dashboards Splunk e estratégias de hunting em ambientes reais.
+**Repositório profissional de ferramentas e automações para monitoramento e defesa de infraestruturas de TI.**
 
----
+Este projeto reúne soluções práticas para profissionais de cibersegurança defensiva (blue team), com foco em automação, detecção, monitoramento e resposta em grandes ambientes empresariais.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Objetivos
 
-- Servir como base de conhecimento técnico para minha atuação profissional em cibersegurança.
-- Compartilhar práticas e ferramentas reais aplicadas em ambientes corporativos.
-- Ajudar outros profissionais a aprender, colaborar e aplicar segurança de forma objetiva.
-
----
+- Fornecer ferramentas prontas para uso em ambientes de produção
+- Automatizar tarefas de segurança repetitivas e complexas
+- Implementar controles de segurança baseados em frameworks como CIS, NIST e MITRE ATT&CK
+- Facilitar a detecção, análise e resposta a incidentes de segurança
+- Servir como referência educacional para equipes de segurança
 
 ## Estrutura do Repositório
 
-```bash
+```
 cybersec-blueprints/
 │
-├── nmap-automation/         # Scripts e wrappers para varredura e parsing automatizado
-├── ansible-hardening/       # Playbooks para hardening de servidores Linux
-├── splunk-dashboards/       # Dashboards e alertas customizados para SIEM
-├── threat-hunting/          # Queries, playbooks e táticas de hunting com base no MITRE ATT&CK
-├── red-vs-blue-labs/        # Ambientes simulados com visão ofensiva e defensiva
-└── docs/                    # Documentação, tutoriais e referências
+├── ansible-hardening/      # Automação de hardening para servidores Linux
+├── nmap-automation/        # Automação de scans de vulnerabilidade com Nmap
+├── splunk-dashboards/      # Dashboards e alertas para monitoramento em SIEM
+├── threat-hunting/         # Queries e playbooks para caça a ameaças
+├── red-vs-blue-labs/       # Laboratórios de simulação para treino de equipes
+└── docs/                   # Documentação e tutoriais
+```
 
-Conteúdo por Módulo
+## Módulos Principais
 
-nmap-automation/
+### 🔒 Ansible Hardening
 
-Scripts Shell e Python para:
-	•	Scans agendados com output estruturado
-	•	Parsing e exportação para CSV/JSON
-	•	Classificação de vulnerabilidades por severidade
+Playbooks e roles Ansible para fortificação de servidores Linux baseados em CIS Benchmarks e práticas de segurança recomendadas:
 
-ansible-hardening/
+- Configurações seguras para SSH
+- Restrições de pacotes e serviços
+- Auditoria de sistema
+- Parâmetros de kernel endurecidos
+- Políticas de senhas e autenticação
 
-Playbooks baseados em benchmarks CIS e práticas de hardening como:
-	•	Desativação de serviços desnecessários
-	•	Políticas de senha e auditoria
-	•	Configurações de firewall e SSH
+[Ver detalhes em ansible-hardening/README.md](ansible-hardening/README.md)
 
-splunk-dashboards/
+### 🔍 Nmap Automation
 
-Dashboards e alertas para:
-	•	Detecção de movimentos laterais
-	•	Análise de tráfego suspeito e brute force
-	•	Tentativas de persistência em endpoints
+Conjunto de scripts para automação de varreduras de segurança, processamento e análise de resultados:
 
-threat-hunting/
+- Varreduras automatizadas e agendadas
+- Conversão de outputs XML para JSON/CSV estruturados
+- Detecção de portas críticas e vulnerabilidades potenciais
+- Integração com sistemas de alerta
 
-Táticas baseadas no MITRE ATTACK:
-	•	Queries para Windows/Linux/M365
-	•	Checklists de análise e indicadores
-	•	Playbooks de hunting manual e automatizado
+[Ver detalhes em nmap-automation/README.md](nmap-automation/README.md)
 
-red-vs-blue-labs/
+### 📊 Splunk Dashboards
 
-Ambientes de simulação:
-	•	Scripts de ataque com Metasploit/Nmap
-	•	Resposta defensiva documentada (logs, alertas)
-	•	Lições aprendidas e estratégias de contenção
+Dashboards e alertas para SIEM focados em detecção de ameaças:
 
+- Monitoramento de atividades suspeitas na rede
+- Detecção de comportamentos anômalos em endpoints
+- Visualização de resultados de scans de vulnerabilidade
+- Alertas configuráveis para equipes de segurança
 
-	•	Requisitos por pasta estão em cada README.md interno.
-	•	Scripts podem ser testados em laboratórios locais ou ambientes virtualizados (VirtualBox, Proxmox, AWS Free Tier).
+[Ver detalhes em splunk-dashboards/README.md](splunk-dashboards/README.md)
 
-COMO USAR
+### 🔎 Threat Hunting
+
+Recursos para identificação proativa de ameaças em ambientes corporativos:
+
+- Queries SPL para detecção de atividades maliciosas
+- Playbooks baseados em táticas MITRE ATT&CK
+- Indicadores de comprometimento (IoCs)
+- Metodologias de hunting para diferentes plataformas
+
+[Ver detalhes em threat-hunting/README.md](threat-hunting/README.md)
+
+### 🥊 Red vs Blue Labs
+
+Ambientes controlados para simulação de ataques e defesa:
+
+- Scripts para simulação de técnicas de ataque comuns
+- Guias para resposta defensiva e mitigação
+- Ambiente para treinamento de equipes de segurança
+
+[Ver detalhes em red-vs-blue-labs/README.md](red-vs-blue-labs/README.md)
+
+## 🛠️ Requisitos Gerais
+
+- Sistemas Linux/Unix para execução de scripts
+- Python 3.8+ para componentes Python
+- Docker para componentes containerizados
+- Acesso SSH com privilégios sudo para hardening Ansible
+- Instância Splunk para dashboards e alertas
+
+*Requisitos específicos para cada módulo estão detalhados em seus respectivos README.md*
+
+## 🚀 Como Usar
+
+Clone este repositório para começar:
+
 ```bash
-git clone https://github.com/seuusuario/cybersec-blueprints.git
+git clone https://github.com/photografereth/cybersec-blueprints.git
 cd cybersec-blueprints
+```
 
-⸻
+Siga as instruções específicas em cada diretório de módulo para implementar e customizar as soluções para seu ambiente.
 
-Contribuição
+## 🤝 Contribuição
 
-Este repositório é vivo. Contribuições são bem-vindas via pull requests, issues ou sugestões no GitHub Discussions.
+Contribuições são bem-vindas! Veja nosso [Guia de Contribuição](CONTRIBUTING.md) para detalhes sobre como participar deste projeto.
 
-⸻
+## 📜 Licença
 
-Licença
+Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-MIT License — fique à vontade para usar, adaptar e contribuir, com atribuição.
+## 📊 Roadmap
 
-⸻
+Para conhecer as próximas melhorias e recursos planejados, consulte o [Roadmap](docs/roadmap.md).
 
-Contato
+## 📞 Contato
 
-Criado por: [Felipe Miranda]
-LinkedIn: [felipe-miranda-399462353]
-GitHub: [photografereth]
+Felipe Miranda
+- LinkedIn: [felipe-miranda-399462353](https://www.linkedin.com/in/felipe-miranda-399462353/)
+- GitHub: [photografereth](https://github.com/photografereth/)

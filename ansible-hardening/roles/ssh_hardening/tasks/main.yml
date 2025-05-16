@@ -1,0 +1,176 @@
+---
+# ssh_hardening/tasks/main.yml
+# Configuração segura do serviço SSH
+
+- name: Garantir que o pacote OpenSSH está instalado
+  package:
+    name: "{{ 'openssh-server' if ansible_os_family == 'Debian' else 'openssh-server' }}"
+    state: present
+  tags:
+    - ssh
+    - security
+
+- name: Fazer backup do arquivo de configuração SSH
+  copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.bak
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0600'
+  register: ssh_backup
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para não permitir login como root
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin {{ ssh_settings.permit_root_login }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para usar apenas o Protocolo 2
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Protocol'
+    line: "Protocol {{ ssh_settings.protocol }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para desabilitar autenticação por senha
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: "PasswordAuthentication {{ ssh_settings.password_authentication }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para definir número máximo de tentativas de autenticação
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?MaxAuthTries'
+    line: "MaxAuthTries {{ ssh_settings.max_auth_tries }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para definir timeout para sessões ociosas
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?ClientAliveInterval'
+    line: "ClientAliveInterval {{ ssh_settings.client_alive_interval }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para definir contagem máxima de checagem de cliente vivo
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?ClientAliveCountMax'
+    line: "ClientAliveCountMax {{ ssh_settings.client_alive_count_max }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Configurar SSH para usar apenas cifras seguras
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Ciphers'
+    line: "Ciphers {{ ssh_settings.ciphers }}"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Desabilitar autenticação baseada em host
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?HostbasedAuthentication'
+    line: "HostbasedAuthentication no"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Desabilitar redirecionamento X11
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?X11Forwarding'
+    line: "X11Forwarding no"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Desabilitar login vazio de senha
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitEmptyPasswords'
+    line: "PermitEmptyPasswords no"
+    state: present
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Criar banner SSH
+  copy:
+    content: "{{ ssh_settings.banner_text }}"
+    dest: "{{ ssh_settings.banner_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: ssh_settings.banner_enabled | bool
+  tags:
+    - ssh
+    - security
+
+- name: Configurar caminho do banner SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Banner'
+    line: "Banner {{ ssh_settings.banner_path }}"
+    state: present
+  when: ssh_settings.banner_enabled | bool
+  notify: restart sshd
+  tags:
+    - ssh
+    - security
+
+- name: Verificar se sshd_config syntax está OK
+  command: sshd -t
+  changed_when: false
+  register: sshd_config_check
+  failed_when: sshd_config_check.rc != 0
+  tags:
+    - ssh
+    - security
+
+- name: Garantir que SSH está habilitado e rodando
+  service:
+    name: sshd
+    state: started
+    enabled: yes
+  tags:
+    - ssh
+    - security

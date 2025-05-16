@@ -1,0 +1,39 @@
+# Requisitos para nmap-automation
+
+# Processamento XML
+xmltodict>=0.13.0
+lxml>=4.9.0
+
+# Formatação e saída
+pyyaml>=6.0
+jinja2>=3.1.0
+tabulate>=0.9.0
+colorama>=0.4.6
+rich>=13.0.0
+
+# Networking e integração
+requests>=2.28.0
+python-nmap>=0.7.1
+netaddr>=0.8.0
+
+# Alerta e notificação
+slackclient>=2.9.0
+discord-webhook>=1.0.0
+python-telegram-bot>=13.0
+
+# Processamento e análise
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Logging e diagnóstico
+loguru>=0.6.0
+
+# CLI e interface
+click>=8.1.0
+tqdm>=4.65.0
+
+# Desenvolvimento e testes
+pytest>=7.3.1
+black>=23.0.0
+flake8>=6.0.0
+EOF < /dev/null

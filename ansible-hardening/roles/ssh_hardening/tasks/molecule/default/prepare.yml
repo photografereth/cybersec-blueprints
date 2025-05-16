@@ -1,0 +1,8 @@
+---
+- name: Preparação da máquina de teste
+  hosts: all
+  become: true
+  tasks:
+    - name: Atualiza cache do apt
+      apt:
+        update_cache: yes

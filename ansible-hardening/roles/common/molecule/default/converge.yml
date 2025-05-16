@@ -1,0 +1,6 @@
+---
+- name: Executa role de hardening comum
+  hosts: all
+  become: true
+  roles:
+    - role: common
