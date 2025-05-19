@@ -1,7 +1,3 @@
-
-**IMPORTANTE** 
-** Este repositório se manterá privado até que o projeto tenha sido concluído e aprovado pelo diretor de TI, garantindo a ética e que não ofereça riscos de cair em mãos erradas.**
-
 # CyberSec Blueprints
 
 **Repositório profissional de ferramentas e automações para monitoramento e defesa de infraestruturas de TI.**
